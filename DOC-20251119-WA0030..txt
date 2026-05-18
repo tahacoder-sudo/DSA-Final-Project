@@ -1,0 +1,312 @@
+﻿import heapq
+from collections import defaultdict
+import os
+import tkinter as tk
+from tkinter import filedialog, messagebox
+
+
+
+
+# =========================================================
+# --- Member 1: Core Algorithm (Compression Logic) ---
+# =========================================================
+
+
+class HuffmanCompressor:
+    """Handles frequency analysis, Huffman Tree construction, and encoding."""
+
+
+    def get_frequency(self, text):
+        frequency = defaultdict(int)
+        for character in text:
+            frequency[character] += 1
+        return frequency
+
+
+    def build_huffman_tree(self, frequency):
+        class Node:
+            def __init__(self, char, freq, left=None, right=None):
+                self.char = char
+                self.freq = freq
+                self.left = left
+                self.right = right
+
+
+            def __lt__(self, other):
+                return self.freq < other.freq
+
+
+        priority_queue = [Node(char, freq) for char, freq in frequency.items()]
+        heapq.heapify(priority_queue)
+
+
+        while len(priority_queue) > 1:
+            left = heapq.heappop(priority_queue)
+            right = heapq.heappop(priority_queue)
+            merged = Node(None, left.freq + right.freq, left, right)
+            heapq.heappush(priority_queue, merged)
+
+
+        return priority_queue[0] if priority_queue else None
+
+
+    def build_encoding_table(self, root):
+        encoding_table = {}
+
+
+        def traverse(node, current_code):
+            if node is None:
+                return
+            if node.char is not None:
+                encoding_table[node.char] = current_code
+                return
+            traverse(node.left, current_code + "0")
+            traverse(node.right, current_code + "1")
+
+
+        traverse(root, "")
+        return encoding_table
+
+
+    def encode_text(self, text, encoding_table):
+        return "".join(encoding_table[char] for char in text)
+
+
+    def compress(self, input_filepath, output_filepath):
+        with open(input_filepath, 'r') as file:
+            text = file.read()
+
+
+        if not text:
+            print("The file is empty. Nothing to compress.")
+            return "", {}
+
+
+        frequency = self.get_frequency(text)
+        root = self.build_huffman_tree(frequency)
+        encoding_table = self.build_encoding_table(root)
+        encoded_string = self.encode_text(text, encoding_table)
+
+
+        print(f"Original Text Length: {len(text)} characters")
+        print(f"Encoded Binary String Length: {len(encoded_string)} bits")
+        return encoded_string, encoding_table
+
+
+
+
+# =========================================================
+# --- Member 2: Decompression & File I/O Logic ---
+# =========================================================
+
+
+class HuffmanDecompressor:
+    """Handles file I/O operations, padding, header storage, and decoding."""
+
+
+    def _pad_encoded_text(self, encoded_text):
+        padding_needed = 8 - (len(encoded_text) % 8)
+        padding_info = bin(padding_needed)[2:].zfill(8)
+        padded_encoded_text = encoded_text + ('0' * padding_needed)
+        return padded_encoded_text, padding_info
+
+
+    def _get_byte_array(self, padded_encoded_text):
+        if len(padded_encoded_text) % 8 != 0:
+            raise ValueError("Padded text length must be a multiple of 8.")
+        byte_array = bytearray()
+        for i in range(0, len(padded_encoded_text), 8):
+            byte = padded_encoded_text[i:i + 8]
+            byte_array.append(int(byte, 2))
+        return byte_array
+
+
+    def write_compressed_file(self, output_filepath, encoded_string, encoding_table):
+        padded_text, padding_info = self._pad_encoded_text(encoded_string)
+        byte_array = self._get_byte_array(padded_text)
+        header_map_string = str(encoding_table)
+
+
+        with open(output_filepath, 'wb') as output:
+            output.write(padding_info.encode('utf-8'))
+            output.write(b'\n')
+            output.write(header_map_string.encode('utf-8'))
+            output.write(b'\n')
+            output.write(bytes(byte_array))
+
+
+        print(f"Compressed data written to: {output_filepath}")
+
+
+    def _remove_padding(self, padded_encoded_text, padding_info):
+        padding_amount = int(padding_info, 2)
+        return padded_encoded_text[:-padding_amount]
+
+
+    def _decode_text(self, encoded_text, decoding_table):
+        current_code = ""
+        decoded_text = []
+        for bit in encoded_text:
+            current_code += bit
+            if current_code in decoding_table:
+                decoded_text.append(decoding_table[current_code])
+                current_code = ""
+        return "".join(decoded_text)
+
+
+    def decompress(self, input_filepath, output_filepath):
+        with open(input_filepath, 'rb') as file:
+            padding_info = file.readline().strip().decode('utf-8')
+            header_map_string = file.readline().strip().decode('utf-8')
+            encoding_table = eval(header_map_string)
+            decoding_table = {code: char for char, code in encoding_table.items()}
+            byte_array = file.read()
+
+
+        bit_string = "".join(bin(byte)[2:].zfill(8) for byte in byte_array)
+        encoded_text = self._remove_padding(bit_string, padding_info)
+        decoded_text = self._decode_text(encoded_text, decoding_table)
+
+
+        with open(output_filepath, 'w') as output:
+            output.write(decoded_text)
+
+
+        print(f"Decompressed data written to: {output_filepath}")
+
+
+
+
+# =========================================================
+# --- Member 3: Tkinter GUI Application ---
+# =========================================================
+
+
+class HuffmanApp:
+    def __init__(self, master):
+        self.master = master
+        master.title("File Compression Tool (Huffman Coding)")
+
+
+        self.compressor = HuffmanCompressor()
+        self.decompressor = HuffmanDecompressor()
+
+
+        self.input_file_path = tk.StringVar()
+        self.output_file_path = tk.StringVar()
+
+
+        self.compress_frame = tk.LabelFrame(master, text="Compress File", padx=10, pady=10)
+        self.compress_frame.pack(padx=10, pady=10, fill="x")
+
+
+        tk.Label(self.compress_frame, text="Input File:").grid(row=0, column=0, sticky="w")
+        tk.Entry(self.compress_frame, textvariable=self.input_file_path, width=50).grid(row=0, column=1, padx=5, pady=5)
+        tk.Button(self.compress_frame, text="Select File", command=self.select_input_file).grid(row=0, column=2, padx=5,
+                                                                                                pady=5)
+
+
+        tk.Label(self.compress_frame, text="Output (.huf):").grid(row=1, column=0, sticky="w")
+        tk.Entry(self.compress_frame, textvariable=self.output_file_path, width=50, state='readonly').grid(row=1,
+                                                                                                           column=1,
+                                                                                                           padx=5,
+                                                                                                           pady=5)
+        tk.Button(self.compress_frame, text="Compress", command=self.run_compression).grid(row=1, column=2, padx=5,
+                                                                                           pady=5)
+
+
+        self.decompress_frame = tk.LabelFrame(master, text="Decompress File", padx=10, pady=10)
+        self.decompress_frame.pack(padx=10, pady=10, fill="x")
+
+
+        self.decompress_input_path = tk.StringVar()
+        tk.Label(self.decompress_frame, text="Compressed File:").grid(row=0, column=0, sticky="w")
+        tk.Entry(self.decompress_frame, textvariable=self.decompress_input_path, width=50).grid(row=0, column=1, padx=5,
+                                                                                                pady=5)
+        tk.Button(self.decompress_frame, text="Select .huf", command=self.select_compressed_file).grid(row=0, column=2,
+                                                                                                       padx=5, pady=5)
+        tk.Button(self.decompress_frame, text="Decompress", command=self.run_decompression).grid(row=1, column=2,
+                                                                                                 padx=5, pady=5)
+
+
+        self.status_label = tk.Label(master, text="Ready.", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
+
+
+        self.stats_text = tk.Text(master, height=5, width=70)
+        self.stats_text.pack(padx=10, pady=5)
+
+
+    def select_input_file(self):
+        file_path = filedialog.askopenfilename(title="Select File to Compress")
+        if file_path:
+            self.input_file_path.set(file_path)
+            base_name, ext = os.path.splitext(file_path)
+            self.output_file_path.set(base_name + ".huf")
+            self.status_label.config(text=f"Selected: {os.path.basename(file_path)}")
+
+
+    def select_compressed_file(self):
+        file_path = filedialog.askopenfilename(title="Select Compressed File (.huf)",
+                                               filetypes=[("Huffman Compressed", "*.huf")])
+        if file_path:
+            self.decompress_input_path.set(file_path)
+            self.status_label.config(text=f"Selected: {os.path.basename(file_path)}")
+
+
+    def update_stats(self, original_size, compressed_size, compression_ratio):
+        self.stats_text.delete(1.0, tk.END)
+        self.stats_text.insert(tk.END, f"Original Size: {original_size} bytes\n")
+        self.stats_text.insert(tk.END, f"Compressed Size: {compressed_size} bytes\n")
+        self.stats_text.insert(tk.END, f"Compression Ratio: {compression_ratio:.2f}%\n")
+
+
+    def run_compression(self):
+        input_path = self.input_file_path.get()
+        output_path = self.output_file_path.get()
+        if not input_path or not output_path:
+            messagebox.showerror("Error", "Please select an input file.")
+            return
+        try:
+            self.status_label.config(text="Compressing... Please wait.")
+            self.master.update()
+            encoded_string, encoding_table = self.compressor.compress(input_path, output_path)
+            if not encoded_string:
+                self.status_label.config(text="Operation failed: Input file was empty.")
+                return
+            self.decompressor.write_compressed_file(output_path, encoded_string, encoding_table)
+            original_size = os.path.getsize(input_path)
+            compressed_size = os.path.getsize(output_path)
+            compression_ratio = 100 * (1 - (compressed_size / original_size))
+            self.update_stats(original_size, compressed_size, compression_ratio)
+            self.status_label.config(text=f"Compression COMPLETE! Ratio: {compression_ratio:.2f}%")
+        except Exception as e:
+            messagebox.showerror("Compression Error", f"An error occurred: {e}")
+            self.status_label.config(text="Compression FAILED.")
+
+
+    def run_decompression(self):
+        input_path = self.decompress_input_path.get()
+        if not input_path:
+            messagebox.showerror("Error", "Please select a compressed file (.huf) to decompress.")
+            return
+        try:
+            self.status_label.config(text="Decompressing... Please wait.")
+            self.master.update()
+            base_name = os.path.splitext(input_path)[0]
+            output_path = base_name + "_decompressed.txt"
+            self.decompressor.decompress(input_path, output_path)
+            self.stats_text.delete(1.0, tk.END)
+            self.stats_text.insert(tk.END, f"Decompression successful!\nOutput saved to:\n{output_path}")
+            self.status_label.config(text="Decompression COMPLETE!")
+        except Exception as e:
+            messagebox.showerror("Decompression Error", f"An error occurred: {e}")
+            self.status_label.config(text="Decompression FAILED.")
+
+
+
+
+if __name__ == '__main__':
+    root = tk.Tk()
+    app = HuffmanApp(root)
+    root.mainloop()
