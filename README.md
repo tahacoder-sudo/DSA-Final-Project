@@ -61,30 +61,6 @@ project-folder/
 ├── README.md
 ```
 
----
-
-## Running the Project
-
-### Clone the repository
-
-```bash
-git clone https://github.com/your-username/your-repository-name.git
-```
-
-### Move into the project directory
-
-```bash
-cd your-repository-name
-```
-
-### Run the application
-
-```bash
-python main.py
-```
-
----
-
 ## Output Example
 
 Compression results displayed by the application:
