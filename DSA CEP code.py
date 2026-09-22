@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox
 
 
 # =========================================================
-# --- Member 1: Core Algorithm (Compression Logic) ---
+# ---  Core Algorithm (Compression Logic) ---
 # =========================================================
 
 
@@ -96,7 +96,7 @@ class HuffmanCompressor:
 
 
 # =========================================================
-# --- Member 2: Decompression & File I/O Logic ---
+# --- Decompression & File I/O Logic ---
 # =========================================================
 
 
@@ -178,7 +178,7 @@ class HuffmanDecompressor:
 
 
 # =========================================================
-# --- Member 3: Tkinter GUI Application ---
+# ---  Tkinter GUI Application ---
 # =========================================================
 
 
